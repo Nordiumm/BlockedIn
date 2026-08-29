@@ -11,6 +11,8 @@ authors: [ Nordiumm ]
 website: https://github.com/Nordiumm/BlockedIn
 
 commands:
+  blockedin:
+    description: BlockedIn command
 
 permissions:
   blockedin.admin:

@@ -1,0 +1,18 @@
+arena:
+  width: 100 #X
+  height: 100 #Y
+  length: 100 #Z
+
+players:
+  minimum-spawn-distance: 10
+  spawn-radius: 40
+  spawn-height: 25
+
+game:
+  minimum-players: 3
+  start-delay: 30
+  countdown: 10
+
+world-border:
+  start-size: 98
+  end-size: 10
