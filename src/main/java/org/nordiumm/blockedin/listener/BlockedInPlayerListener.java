@@ -84,6 +84,7 @@ public class BlockedInPlayerListener implements Listener {
         }
 
         game.addSpectator(player);
+        game.checkWinCondition();
     }
 
     @EventHandler

@@ -27,6 +27,7 @@ public class BlockedInGame {
     private BukkitTask startDelayTask;
     private BukkitTask playerRequirementTask;
     private BukkitTask generationTask;
+    private BukkitTask borderTask;
 
     private GameState state = GameState.WAITING;
     private World world;
@@ -263,6 +264,8 @@ public class BlockedInGame {
 
         state = GameState.RUNNING;
 
+        startBorder();
+
         timer = new GameTimer(this);
         timer.startCountdown();
     }
@@ -374,6 +377,11 @@ public class BlockedInGame {
             }
         }
 
+        world.getWorldBorder().setSize(
+                plugin.getConfig()
+                        .getDouble("world-border.start-size")
+        );
+
         spawnLocations.clear();
     }
 
@@ -392,16 +400,24 @@ public class BlockedInGame {
             timer = null;
         }
 
+        for (Player player : new ArrayList<>(players)) {
+            addSpectator(player);
+        }
+
         spawnLocations.clear();
         alive.clear();
-        spectators.clear();
-        players.clear();
+
+        if (borderTask != null) {
+            borderTask.cancel();
+            borderTask = null;
+        }
 
         state = GameState.WAITING;
 
         resetArena();
 
         startPlayerRequirementDisplay();
+        updatePlayerRequirement();
     }
 
     public void createArena() {
@@ -452,10 +468,17 @@ public class BlockedInGame {
         double centerX = width / 2.0;
         double centerZ = length / 2.0;
 
-        double size = Math.max(width, length);
+        double startSize = plugin.getConfig()
+                .getDouble("world-border.start-size");
 
-        world.getWorldBorder().setCenter(centerX, centerZ);
-        world.getWorldBorder().setSize(size);
+        world.getWorldBorder().setCenter(
+                centerX,
+                centerZ
+        );
+
+        world.getWorldBorder().setSize(
+                startSize
+        );
     }
 
     public void createSpawnHoles() {
@@ -566,6 +589,63 @@ public class BlockedInGame {
 
             index++;
         }
+    }
+
+    public void startBorder() {
+
+        if (world == null) {
+            return;
+        }
+
+        double endSize = plugin.getConfig()
+                .getDouble("world-border.end-size");
+
+        long durationSeconds = plugin.getConfig()
+                .getLong("world-border.shrink-duration");
+
+        long durationTicks = durationSeconds * 20L;
+
+        world.getWorldBorder().changeSize(
+                endSize,
+                durationTicks
+        );
+    }
+
+    public void checkWinCondition() {
+
+        if (state != GameState.RUNNING) {
+            return;
+        }
+
+        if (alive.size() > 1) {
+            return;
+        }
+
+        if (alive.size() == 1) {
+
+            Player winner = alive.get(0);
+
+            String message = "§eBlockedIn §7» §a"
+                    + winner.getName()
+                    + " §fhas won the game!";
+
+            plugin.getServer().broadcastMessage(message);
+
+            for (Player player : plugin.getServer().getOnlinePlayers()) {
+                player.showTitle(
+                        net.kyori.adventure.title.Title.title(
+                                net.kyori.adventure.text.Component.text(
+                                        "§6§lWINNER!"
+                                ),
+                                net.kyori.adventure.text.Component.text(
+                                        "§a" + winner.getName()
+                                )
+                        )
+                );
+            }
+        }
+
+        reset();
     }
 
     public void generateBlocks() {
