@@ -36,7 +36,7 @@ public class GameTimer {
 
                 if (seconds <= 0) {
                     for (Player player : game.getPlayers()) {
-                        player.sendMessage("§aGO!");
+                        player.sendMessage("§eBlockedIn §7» §aGO!");
                     }
 
                     game.setState(GameState.RUNNING);
@@ -47,7 +47,7 @@ public class GameTimer {
                 }
 
                 for (Player player : game.getPlayers()) {
-                    player.sendMessage("§e" + seconds);
+                    player.sendMessage("§eBlockedIn §7» §e" + seconds);
                 }
 
                 seconds--;

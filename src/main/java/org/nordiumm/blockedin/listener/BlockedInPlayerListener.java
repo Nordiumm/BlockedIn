@@ -3,6 +3,7 @@ package org.nordiumm.blockedin.listener;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.Component;
 import org.bukkit.GameMode;
+import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -16,9 +17,29 @@ import org.nordiumm.blockedin.game.BlockedInGame;
 import org.bukkit.Location;
 import org.bukkit.event.player.PlayerMoveEvent;
 
+import java.util.Random;
+
 public class BlockedInPlayerListener implements Listener {
 
+    private final Random random = new Random();
     private final BlockedIn plugin;
+
+    private final String[] genericDeathMessages = {
+            "§c%s was BLOCKED IN!",
+            "§c%s couldn't escape the blocks!",
+            "§c%s has been eliminated!",
+            "§c%s got trapped!",
+            "§c%s's luck finally ran out!",
+            "§c%s has become a spectator!"
+    };
+
+    private final String[] playerDeathMessages = {
+            "§c%s was executed by %s!",
+            "§c%s was sent to spectator mode by %s!",
+            "§c%s was defeated by %s!",
+            "§c%s was deemed to have played enough by %s!",
+            "§c%s got absolutely folded by %s!"
+    };
 
     public BlockedInPlayerListener(BlockedIn plugin) {
         this.plugin = plugin;
@@ -71,17 +92,50 @@ public class BlockedInPlayerListener implements Listener {
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
 
+        Player player = event.getEntity();
         BlockedInGame game = plugin.getGame();
 
         if (game == null) {
             return;
         }
 
-        Player player = event.getEntity();
-
+        // Only handle BlockedIn players who are alive
         if (!game.getAlive().contains(player)) {
             return;
         }
+
+        Player killer = player.getKiller();
+
+        String message;
+
+        if (killer != null) {
+
+            message = String.format(
+                    playerDeathMessages[
+                            random.nextInt(playerDeathMessages.length)
+                            ],
+                    player.getName(),
+                    killer.getName()
+            );
+
+        } else {
+
+            message = String.format(
+                    genericDeathMessages[
+                            random.nextInt(genericDeathMessages.length)
+                            ],
+                    player.getName()
+            );
+        }
+
+        event.setDeathMessage(message);
+
+        player.getWorld().playSound(
+                player.getLocation(),
+                Sound.ENTITY_LIGHTNING_BOLT_THUNDER,
+                3.0f,
+                1.0f
+        );
 
         game.addSpectator(player);
         game.checkWinCondition();
@@ -128,7 +182,7 @@ public class BlockedInPlayerListener implements Listener {
             );
         } else if (game.getSpectators().contains(player)) {
             event.renderer((source, sourceDisplayName, message, viewer) ->
-                    Component.text("§7" + source.getName() + "§7: ")
+                    Component.text("§c" + source.getName() + "§c: ")
                             .append(message)
             );
         }

@@ -18,6 +18,7 @@ import java.util.Set;
 
 public class BlockedInGame {
 
+    private final Set<Location> staticPhysicsBlocks = new HashSet<>();
     private final BlockedIn plugin;
     private final Set<Player> players = new HashSet<>();
     private final List<Location> spawnLocations = new ArrayList<>();
@@ -61,8 +62,8 @@ public class BlockedInGame {
         player.getInventory().setItemInOffHand(null);
 
         player.setGameMode(GameMode.SPECTATOR);
-        player.setPlayerListName("§7" + player.getName());
-        player.setDisplayName("§7" + player.getName());
+        player.setPlayerListName("§c" + player.getName());
+        player.setDisplayName("§c" + player.getName());
     }
 
     public void addAlive(Player player) {
@@ -91,6 +92,10 @@ public class BlockedInGame {
 
     public List<Location> getSpawnLocations() {
         return spawnLocations;
+    }
+
+    public Set<Location> getStaticPhysicsBlocks() {
+        return staticPhysicsBlocks;
     }
 
     public GameTimer getTimer() {
@@ -236,9 +241,19 @@ public class BlockedInGame {
             return;
         }
 
+        staticPhysicsBlocks.clear();
+
         resetArena();
         createArena();
-        createSpawnHoles();
+
+        if (!createSpawnHoles()) {
+            plugin.getLogger().warning(
+                    "Could not create enough spawn locations. "
+                            + "BlockedIn will not start."
+            );
+            return;
+        }
+
         setupWorldBorder();
 
         alive.clear();
@@ -383,6 +398,7 @@ public class BlockedInGame {
         );
 
         spawnLocations.clear();
+        staticPhysicsBlocks.clear();
     }
 
     public void reset() {
@@ -400,17 +416,18 @@ public class BlockedInGame {
             timer = null;
         }
 
+        if (borderTask != null) {
+            borderTask.cancel();
+            borderTask = null;
+        }
+
         for (Player player : new ArrayList<>(players)) {
             addSpectator(player);
         }
 
         spawnLocations.clear();
         alive.clear();
-
-        if (borderTask != null) {
-            borderTask.cancel();
-            borderTask = null;
-        }
+        staticPhysicsBlocks.clear();
 
         state = GameState.WAITING;
 
@@ -481,12 +498,12 @@ public class BlockedInGame {
         );
     }
 
-    public void createSpawnHoles() {
+    public boolean createSpawnHoles() {
 
         spawnLocations.clear();
 
         if (world == null) {
-            return;
+            return false;
         }
 
         int width = plugin.getConfig()
@@ -501,33 +518,29 @@ public class BlockedInGame {
         double minimumDistance = plugin.getConfig()
                 .getDouble("players.minimum-spawn-distance");
 
-        double spawnRadius = plugin.getConfig()
-                .getDouble("players.spawn-radius");
+        int minX = 2;
+        int maxX = width - 3;
 
-        int spawnHeight = plugin.getConfig()
-                .getInt("players.spawn-height");
+        int minY = 1;
+        int maxY = height - 3;
 
-        double centerX = width / 2.0;
-        double centerZ = length / 2.0;
+        int minZ = 2;
+        int maxZ = length - 3;
 
         for (Player player : players) {
 
             Location spawn = null;
 
-            for (int attempts = 0; attempts < 1000; attempts++) {
+            for (int attempts = 0; attempts < 5000; attempts++) {
 
-                double angle = random.nextDouble() * Math.PI * 2;
-
-                double x = centerX +
-                        Math.cos(angle) * spawnRadius;
-
-                double z = centerZ +
-                        Math.sin(angle) * spawnRadius;
+                int x = minX + random.nextInt(maxX - minX + 1);
+                int y = minY + random.nextInt(maxY - minY + 1);
+                int z = minZ + random.nextInt(maxZ - minZ + 1);
 
                 Location candidate = new Location(
                         world,
                         x + 0.5,
-                        spawnHeight,
+                        y,
                         z + 0.5
                 );
 
@@ -543,10 +556,12 @@ public class BlockedInGame {
                     }
                 }
 
-                if (valid) {
-                    spawn = candidate;
-                    break;
+                if (!valid) {
+                    continue;
                 }
+
+                spawn = candidate;
+                break;
             }
 
             if (spawn == null) {
@@ -556,7 +571,7 @@ public class BlockedInGame {
                                 + player.getName()
                 );
 
-                continue;
+                return false;
             }
 
             spawnLocations.add(spawn);
@@ -570,7 +585,17 @@ public class BlockedInGame {
 
             world.getBlockAt(x, y + 1, z)
                     .setType(Material.AIR);
+
+            world.getBlockAt(x, y, z)
+                    .getState()
+                    .update(true, false);
+
+            world.getBlockAt(x, y + 1, z)
+                    .getState()
+                    .update(true, false);
         }
+
+        return spawnLocations.size() == players.size();
     }
 
     public void teleportPlayers() {
@@ -597,6 +622,11 @@ public class BlockedInGame {
             return;
         }
 
+        if (borderTask != null) {
+            borderTask.cancel();
+            borderTask = null;
+        }
+
         double endSize = plugin.getConfig()
                 .getDouble("world-border.end-size");
 
@@ -604,6 +634,11 @@ public class BlockedInGame {
                 .getLong("world-border.shrink-duration");
 
         long durationTicks = durationSeconds * 20L;
+
+        world.getWorldBorder().setSize(
+                plugin.getConfig()
+                        .getDouble("world-border.start-size")
+        );
 
         world.getWorldBorder().changeSize(
                 endSize,
@@ -701,8 +736,16 @@ public class BlockedInGame {
                             continue;
                         }
 
+                        Material material = getRandomAllowedBlock();
+
                         world.getBlockAt(x, y, z)
-                                .setType(getRandomAllowedBlock());
+                                .setType(material);
+
+                        if (isStaticPhysicsBlock(material)) {
+                            staticPhysicsBlocks.add(
+                                    new Location(world, x, y, z)
+                            );
+                        }
                     }
                 }
 
@@ -710,6 +753,14 @@ public class BlockedInGame {
             }
 
         }.runTaskTimer(plugin, 0L, 1L);
+    }
+
+    private boolean isStaticPhysicsBlock(Material material) {
+
+        return material == Material.SAND
+                || material == Material.GRAVEL
+                || material == Material.WATER
+                || material == Material.LAVA;
     }
 
     private boolean isSpawnHoleBlock(
@@ -724,11 +775,19 @@ public class BlockedInGame {
             int spawnY = spawn.getBlockY();
             int spawnZ = spawn.getBlockZ();
 
-            if (x == spawnX &&
-                    z == spawnZ &&
-                    (y == spawnY ||
-                            y == spawnY + 1)) {
+            boolean insideX =
+                    x >= spawnX - 1 &&
+                            x <= spawnX + 1;
 
+            boolean insideZ =
+                    z >= spawnZ - 1 &&
+                            z <= spawnZ + 1;
+
+            boolean insideY =
+                    y == spawnY ||
+                            y == spawnY + 1;
+
+            if (insideX && insideZ && insideY) {
                 return true;
             }
         }
