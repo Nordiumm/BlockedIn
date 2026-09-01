@@ -1,5 +1,6 @@
 blocks:
   - STONE
+  - DIRT
   - BIRCH_LOG
   - SPRUCE_LOG
   - JUNGLE_LOG
@@ -12,7 +13,6 @@ blocks:
   - CRAFTING_TABLE
   - HAY_BLOCK
   - BOOKSHELF
-  - TNT
   - OBSIDIAN
   - OAK_LOG
   - COAL_ORE
@@ -25,3 +25,6 @@ blocks:
   - COAL_BLOCK
   - GRAVEL
   - SAND
+  - SNOW_BLOCK
+  - REDSTONE_ORE
+  - GLOWSTONE

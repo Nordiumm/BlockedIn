@@ -5,9 +5,13 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.nordiumm.blockedin.command.BlockedInCommand;
+import org.nordiumm.blockedin.database.BlockedInDatabase;
 import org.nordiumm.blockedin.game.BlockedInGame;
 import org.nordiumm.blockedin.listener.BlockedInBlockListener;
+import org.nordiumm.blockedin.listener.BlockedInLeaderboardListener;
 import org.nordiumm.blockedin.listener.BlockedInPlayerListener;
+import org.nordiumm.blockedin.listener.BlockedInRecipeListener;
+import org.nordiumm.blockedin.recipe.BlockedInRecipes;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -19,9 +23,17 @@ public class BlockedIn extends JavaPlugin {
     private File whitelistFile;
 
     private GameState gameState = GameState.WAITING;
-    private BlockedInGame game;
 
-    private final List<Material> allowedBlocks = new ArrayList<>();
+    private BlockedInGame game;
+    private BlockedInRecipes recipes;
+    private BlockedInDatabase database;
+
+    private final List<Material> allowedBlocks =
+            new ArrayList<>();
+
+    public BlockedInRecipes getRecipes() {
+        return recipes;
+    }
 
     public List<Material> getAllowedBlocks() {
         return allowedBlocks;
@@ -43,30 +55,43 @@ public class BlockedIn extends JavaPlugin {
         this.gameState = gameState;
     }
 
+    public BlockedInDatabase getDatabase() {
+        return database;
+    }
+
     @Override
     public void onEnable() {
 
-        getLogger().info("BlockedIn has been enabled!");
-
         saveDefaultConfig();
+
+        recipes = new BlockedInRecipes(this);
+        recipes.registerRecipes();
+
+        database = new BlockedInDatabase(this);
+        database.connect();
 
         saveResource("whitelist.yml", false);
         reloadWhitelist();
 
-        // Get the permanent BlockedIn world.
         if (getServer().getWorld("blockedin") == null) {
             getLogger().warning(
                     "World 'blockedin' is not loaded!"
             );
         }
 
-        // Create the game once when the server starts.
         game = new BlockedInGame(this);
 
-        BlockedInCommand command = new BlockedInCommand(this);
+        BlockedInCommand command =
+                new BlockedInCommand(this);
 
-        getCommand("blockedin").setExecutor(command);
-        getCommand("blockedin").setTabCompleter(command);
+        if (getCommand("blockedin") != null) {
+
+            getCommand("blockedin")
+                    .setExecutor(command);
+
+            getCommand("blockedin")
+                    .setTabCompleter(command);
+        }
 
         getServer().getPluginManager().registerEvents(
                 new BlockedInBlockListener(this),
@@ -78,7 +103,19 @@ public class BlockedIn extends JavaPlugin {
                 this
         );
 
-        getLogger().info("BlockedIn game initialized!");
+        getServer().getPluginManager().registerEvents(
+                new BlockedInRecipeListener(this),
+                this
+        );
+
+        getServer().getPluginManager().registerEvents(
+                new BlockedInLeaderboardListener(),
+                this
+        );
+
+        getLogger().info(
+                "BlockedIn has been enabled!"
+        );
     }
 
     @Override
@@ -88,7 +125,13 @@ public class BlockedIn extends JavaPlugin {
             game.reset();
         }
 
-        getLogger().info("BlockedIn has been disabled!");
+        if (database != null) {
+            database.close();
+        }
+
+        getLogger().info(
+                "BlockedIn has been disabled!"
+        );
     }
 
     public void reloadWhitelist() {
@@ -111,7 +154,8 @@ public class BlockedIn extends JavaPlugin {
             Material material =
                     Material.matchMaterial(blockName);
 
-            if (material == null || !material.isBlock()) {
+            if (material == null
+                    || !material.isBlock()) {
 
                 getLogger().warning(
                         "Invalid block in whitelist.yml: "

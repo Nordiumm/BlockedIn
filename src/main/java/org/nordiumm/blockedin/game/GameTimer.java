@@ -43,6 +43,7 @@ public class GameTimer {
 
                     cancel();
                     startGameTimer();
+                    startBorderCountdown();
                     return;
                 }
 
@@ -107,5 +108,44 @@ public class GameTimer {
             bossBar.removeAll();
             bossBar = null;
         }
+    }
+
+    private void startBorderCountdown() {
+
+        long delaySeconds = game.getPlugin()
+                .getConfig()
+                .getLong("world-border.start-delay");
+
+        for (Player player : game.getPlayers()) {
+            player.sendMessage(
+                    "§eBlockedIn §7» §fThe world border will start shrinking in §e"
+                            + delaySeconds
+                            + " §fseconds!"
+            );
+        }
+
+        new BukkitRunnable() {
+
+            @Override
+            public void run() {
+
+                if (game.getState() != GameState.RUNNING) {
+                    cancel();
+                    return;
+                }
+
+                for (Player player : game.getPlayers()) {
+                    player.sendMessage(
+                            "§eBlockedIn §7» §cThe world border is shrinking!"
+                    );
+                }
+
+                game.startBorder();
+            }
+
+        }.runTaskLater(
+                game.getPlugin(),
+                delaySeconds * 20L
+        );
     }
 }

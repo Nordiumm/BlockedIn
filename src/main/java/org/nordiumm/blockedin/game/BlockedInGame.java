@@ -4,6 +4,9 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.ExperienceOrb;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
@@ -18,27 +21,47 @@ import java.util.Set;
 
 public class BlockedInGame {
 
-    private final Set<Location> staticPhysicsBlocks = new HashSet<>();
+    private final Set<Location> staticPhysicsBlocks =
+            new HashSet<>();
+
     private final BlockedIn plugin;
-    private final Set<Player> players = new HashSet<>();
-    private final List<Location> spawnLocations = new ArrayList<>();
-    private final Random random = new Random();
+
+    private final Set<Player> players =
+            new HashSet<>();
+
+    private final List<Location> spawnLocations =
+            new ArrayList<>();
+
+    private final Random random =
+            new Random();
 
     private GameTimer timer;
+
     private BukkitTask startDelayTask;
     private BukkitTask playerRequirementTask;
     private BukkitTask generationTask;
     private BukkitTask borderTask;
+    private BukkitTask resetTask;
+    private BukkitTask endTask;
 
-    private GameState state = GameState.WAITING;
+    private GameState state =
+            GameState.WAITING;
+
     private World world;
 
-    private final List<Player> alive = new ArrayList<>();
-    private final List<Player> spectators = new ArrayList<>();
+    private final List<Player> alive =
+            new ArrayList<>();
+
+    private final List<Player> spectators =
+            new ArrayList<>();
 
     public BlockedInGame(BlockedIn plugin) {
+
         this.plugin = plugin;
-        world = plugin.getServer().getWorld("blockedin");
+
+        world = plugin.getServer()
+                .getWorld("blockedin");
+
         startPlayerRequirementDisplay();
     }
 
@@ -48,34 +71,6 @@ public class BlockedInGame {
 
     public List<Player> getSpectators() {
         return spectators;
-    }
-
-    public void addSpectator(Player player) {
-        alive.remove(player);
-
-        if (!spectators.contains(player)) {
-            spectators.add(player);
-        }
-
-        player.getInventory().clear();
-        player.getInventory().setArmorContents(null);
-        player.getInventory().setItemInOffHand(null);
-
-        player.setGameMode(GameMode.SPECTATOR);
-        player.setPlayerListName("§c" + player.getName());
-        player.setDisplayName("§c" + player.getName());
-    }
-
-    public void addAlive(Player player) {
-        spectators.remove(player);
-
-        if (!alive.contains(player)) {
-            alive.add(player);
-        }
-
-        player.setGameMode(GameMode.SURVIVAL);
-        player.setPlayerListName("§a" + player.getName());
-        player.setDisplayName("§a" + player.getName());
     }
 
     public BlockedIn getPlugin() {
@@ -110,22 +105,82 @@ public class BlockedInGame {
         this.state = state;
     }
 
+    public void addAlive(Player player) {
+
+        spectators.remove(player);
+
+        if (!alive.contains(player)) {
+            alive.add(player);
+        }
+
+        if (!players.contains(player)) {
+            players.add(player);
+        }
+
+        player.setGameMode(GameMode.SURVIVAL);
+
+        updatePlayerColors(player);
+    }
+
+    public void addSpectator(Player player) {
+
+        alive.remove(player);
+
+        if (!spectators.contains(player)) {
+            spectators.add(player);
+        }
+
+        player.getInventory().clear();
+        player.getInventory().setArmorContents(null);
+        player.getInventory().setItemInOffHand(null);
+
+        player.setGameMode(GameMode.SPECTATOR);
+
+        updatePlayerColors(player);
+    }
+
+    public void removePlayer(Player player) {
+
+        players.remove(player);
+        alive.remove(player);
+        spectators.remove(player);
+
+        resetPlayerColors(player);
+
+        if (state == GameState.WAITING
+                && resetTask == null
+                && generationTask == null) {
+
+            checkStart();
+            updatePlayerRequirement();
+
+        } else if (state == GameState.RUNNING) {
+
+            checkWinCondition();
+        }
+    }
+
     public void checkStart() {
 
         if (state != GameState.WAITING) {
             return;
         }
 
-        if (generationTask != null) {
+        if (resetTask != null
+                || generationTask != null) {
+
             return;
         }
 
-        int minimumPlayers = plugin.getConfig()
-                .getInt("game.minimum-players");
+        int minimumPlayers =
+                plugin.getConfig()
+                        .getInt("game.minimum-players");
 
         if (players.size() < minimumPlayers) {
+
             cancelStartDelay();
             updatePlayerRequirement();
+
             return;
         }
 
@@ -140,24 +195,30 @@ public class BlockedInGame {
 
     public void updatePlayerRequirement() {
 
-        if (state != GameState.WAITING) {
+        if (state != GameState.WAITING
+                || resetTask != null
+                || generationTask != null) {
+
             return;
         }
 
-        int minimumPlayers = plugin.getConfig()
-                .getInt("game.minimum-players");
+        int minimumPlayers =
+                plugin.getConfig()
+                        .getInt("game.minimum-players");
 
-        int needed = minimumPlayers - players.size();
+        int needed =
+                minimumPlayers - players.size();
 
         if (needed <= 0) {
             return;
         }
 
-        String message = "§eBlockedIn §7» §f"
-                + needed
-                + " more player"
-                + (needed == 1 ? "" : "s")
-                + " needed to start!";
+        String message =
+                "§eBlockedIn §7» §f"
+                        + needed
+                        + " more player"
+                        + (needed == 1 ? "" : "s")
+                        + " needed to start!";
 
         for (Player player : players) {
             player.sendActionBar(message);
@@ -170,35 +231,55 @@ public class BlockedInGame {
             return;
         }
 
-        playerRequirementTask = new BukkitRunnable() {
+        playerRequirementTask =
+                new BukkitRunnable() {
 
-            @Override
-            public void run() {
+                    @Override
+                    public void run() {
 
-                if (state != GameState.WAITING) {
-                    cancel();
-                    playerRequirementTask = null;
-                    return;
-                }
+                        if (state != GameState.WAITING) {
 
-                int minimumPlayers = plugin.getConfig()
-                        .getInt("game.minimum-players");
+                            cancel();
+                            playerRequirementTask = null;
 
-                if (players.size() >= minimumPlayers) {
-                    cancel();
-                    playerRequirementTask = null;
-                    return;
-                }
+                            return;
+                        }
 
-                updatePlayerRequirement();
-            }
+                        if (resetTask != null
+                                || generationTask != null) {
 
-        }.runTaskTimer(plugin, 0L, 40L);
+                            return;
+                        }
+
+                        int minimumPlayers =
+                                plugin.getConfig()
+                                        .getInt(
+                                                "game.minimum-players"
+                                        );
+
+                        if (players.size()
+                                >= minimumPlayers) {
+
+                            cancel();
+                            playerRequirementTask = null;
+
+                            return;
+                        }
+
+                        updatePlayerRequirement();
+                    }
+
+                }.runTaskTimer(
+                        plugin,
+                        0L,
+                        40L
+                );
     }
 
     public void stopPlayerRequirementDisplay() {
 
         if (playerRequirementTask != null) {
+
             playerRequirementTask.cancel();
             playerRequirementTask = null;
         }
@@ -210,8 +291,15 @@ public class BlockedInGame {
             return;
         }
 
-        int minimumPlayers = plugin.getConfig()
-                .getInt("game.minimum-players");
+        if (resetTask != null
+                || generationTask != null) {
+
+            return;
+        }
+
+        int minimumPlayers =
+                plugin.getConfig()
+                        .getInt("game.minimum-players");
 
         if (players.size() < minimumPlayers) {
             return;
@@ -229,36 +317,63 @@ public class BlockedInGame {
             return;
         }
 
+        if (resetTask != null
+                || generationTask != null) {
+
+            return;
+        }
+
         cancelStartDelay();
         stopPlayerRequirementDisplay();
 
         prepareArena();
     }
 
+    /**
+     * Starts preparing a NEW game.
+     *
+     * The arena is reset here, rather than when the
+     * previous game ends.
+     */
     private void prepareArena() {
 
-        if (generationTask != null) {
+        if (resetTask != null
+                || generationTask != null) {
+
             return;
         }
+
+        cancelEndTask();
 
         staticPhysicsBlocks.clear();
-
-        resetArena();
-        createArena();
-
-        if (!createSpawnHoles()) {
-            plugin.getLogger().warning(
-                    "Could not create enough spawn locations. "
-                            + "BlockedIn will not start."
-            );
-            return;
-        }
-
-        setupWorldBorder();
-
+        spawnLocations.clear();
         alive.clear();
 
-        generateBlocks();
+        startArenaReset(() -> {
+
+            if (players.isEmpty()) {
+
+                startPlayerRequirementDisplay();
+
+                return;
+            }
+
+            if (!createSpawnHoles()) {
+
+                plugin.getLogger().warning(
+                        "Could not create enough spawn locations. "
+                                + "BlockedIn will not start."
+                );
+
+                startPlayerRequirementDisplay();
+
+                return;
+            }
+
+            setupWorldBorder();
+
+            generateBlocks();
+        });
     }
 
     private void finishArenaPreparation() {
@@ -271,170 +386,424 @@ public class BlockedInGame {
             return;
         }
 
-        for (Player player : new ArrayList<>(players)) {
+        for (Player player :
+                new ArrayList<>(players)) {
+
             addAlive(player);
+
+            plugin.getDatabase()
+                    .addGamePlayed(player);
         }
 
         teleportPlayers();
 
-        state = GameState.RUNNING;
-
-        startBorder();
+        state = GameState.COUNTDOWN;
 
         timer = new GameTimer(this);
+
         timer.startCountdown();
     }
 
     private void startDelay() {
 
-        int delay = plugin.getConfig()
-                .getInt("game.start-delay");
+        int delay =
+                plugin.getConfig()
+                        .getInt("game.start-delay");
 
         if (delay <= 0) {
+
             startGame();
+
             return;
         }
 
-        startDelayTask = new BukkitRunnable() {
+        startDelayTask =
+                new BukkitRunnable() {
 
-            int seconds = delay;
+                    int seconds = delay;
 
-            @Override
-            public void run() {
+                    @Override
+                    public void run() {
 
-                if (state != GameState.WAITING) {
-                    cancel();
-                    startDelayTask = null;
-                    return;
-                }
+                        if (state != GameState.WAITING) {
 
-                int minimumPlayers = plugin.getConfig()
-                        .getInt("game.minimum-players");
+                            cancel();
+                            startDelayTask = null;
 
-                if (players.size() < minimumPlayers) {
-                    cancel();
-                    startDelayTask = null;
-                    startPlayerRequirementDisplay();
-                    updatePlayerRequirement();
-                    return;
-                }
+                            return;
+                        }
 
-                if (seconds <= 0) {
-                    cancel();
-                    startDelayTask = null;
-                    startGame();
-                    return;
-                }
+                        if (resetTask != null
+                                || generationTask != null) {
 
-                String message = "§eBlockedIn §7» §fStarting in §e"
-                        + seconds
-                        + "§f second"
-                        + (seconds == 1 ? "" : "s")
-                        + "!";
+                            cancel();
+                            startDelayTask = null;
 
-                for (Player player : players) {
-                    player.sendActionBar(message);
-                }
+                            return;
+                        }
 
-                seconds--;
-            }
+                        int minimumPlayers =
+                                plugin.getConfig()
+                                        .getInt(
+                                                "game.minimum-players"
+                                        );
 
-        }.runTaskTimer(plugin, 0L, 20L);
+                        if (players.size()
+                                < minimumPlayers) {
+
+                            cancel();
+                            startDelayTask = null;
+
+                            startPlayerRequirementDisplay();
+                            updatePlayerRequirement();
+
+                            return;
+                        }
+
+                        if (seconds <= 0) {
+
+                            cancel();
+                            startDelayTask = null;
+
+                            startGame();
+
+                            return;
+                        }
+
+                        String message =
+                                "§eBlockedIn §7» §fStarting in §e"
+                                        + seconds
+                                        + "§f second"
+                                        + (seconds == 1
+                                        ? ""
+                                        : "s")
+                                        + "!";
+
+                        for (Player player : players) {
+
+                            player.sendActionBar(
+                                    message
+                            );
+                        }
+
+                        seconds--;
+                    }
+
+                }.runTaskTimer(
+                        plugin,
+                        0L,
+                        20L
+                );
     }
 
     public void cancelStartDelay() {
 
         if (startDelayTask != null) {
+
             startDelayTask.cancel();
             startDelayTask = null;
         }
     }
 
-    public void resetArena() {
+    private void startArenaReset(Runnable onComplete) {
 
-        if (world == null) {
-            world = plugin.getServer().getWorld("blockedin");
-        }
-
-        if (world == null) {
-            plugin.getLogger().warning(
-                    "Could not reset BlockedIn arena because world 'blockedin' does not exist."
-            );
+        if (resetTask != null) {
             return;
         }
 
-        int width = plugin.getConfig()
-                .getInt("arena.width");
+        if (world == null) {
 
-        int height = plugin.getConfig()
-                .getInt("arena.height");
-
-        int length = plugin.getConfig()
-                .getInt("arena.length");
-
-        for (int x = 0; x < width; x++) {
-            for (int y = 0; y < height; y++) {
-                for (int z = 0; z < length; z++) {
-
-                    boolean isWall =
-                            x == 0 || x == width - 1 ||
-                                    y == 0 || y == height - 1 ||
-                                    z == 0 || z == length - 1;
-
-                    if (isWall) {
-                        world.getBlockAt(x, y, z)
-                                .setType(Material.BEDROCK);
-                    } else {
-                        world.getBlockAt(x, y, z)
-                                .setType(Material.AIR);
-                    }
-                }
-            }
+            world = plugin.getServer()
+                    .getWorld("blockedin");
         }
 
-        world.getWorldBorder().setSize(
-                plugin.getConfig()
-                        .getDouble("world-border.start-size")
-        );
+        if (world == null) {
 
-        spawnLocations.clear();
-        staticPhysicsBlocks.clear();
+            plugin.getLogger().warning(
+                    "Could not reset BlockedIn arena because "
+                            + "world 'blockedin' does not exist."
+            );
+
+            return;
+        }
+
+        int width =
+                plugin.getConfig()
+                        .getInt("arena.width");
+
+        int height =
+                plugin.getConfig()
+                        .getInt("arena.height");
+
+        int length =
+                plugin.getConfig()
+                        .getInt("arena.length");
+
+        resetTask =
+                new BukkitRunnable() {
+
+                    int y = 0;
+
+                    @Override
+                    public void run() {
+
+                        if (y >= height) {
+
+                            cancel();
+
+                            resetTask = null;
+
+                            spawnLocations.clear();
+                            staticPhysicsBlocks.clear();
+
+                            world.getWorldBorder()
+                                    .setCenter(
+                                            width / 2.0,
+                                            length / 2.0
+                                    );
+
+                            world.getWorldBorder()
+                                    .setSize(
+                                            plugin.getConfig()
+                                                    .getDouble(
+                                                            "world-border.start-size"
+                                                    )
+                                    );
+
+                            sendProgress(
+                                    "Resetting arena",
+                                    100
+                            );
+
+                            onComplete.run();
+
+                            return;
+                        }
+
+                        for (int x = 0;
+                             x < width;
+                             x++) {
+
+                            for (int z = 0;
+                                 z < length;
+                                 z++) {
+
+                                boolean isWall =
+                                        x == 0
+                                                || x == width - 1
+                                                || y == 0
+                                                || y == height - 1
+                                                || z == 0
+                                                || z == length - 1;
+
+                                world.getBlockAt(
+                                                x,
+                                                y,
+                                                z
+                                        )
+                                        .setType(
+                                                isWall
+                                                        ? Material.BEDROCK
+                                                        : Material.AIR
+                                        );
+                            }
+                        }
+
+                        int percent =
+                                Math.min(
+                                        100,
+                                        (int) (((y + 1)
+                                                * 100.0)
+                                                / height)
+                                );
+
+                        sendProgress(
+                                "Resetting arena",
+                                percent
+                        );
+
+                        y++;
+                    }
+
+                }.runTaskTimer(
+                        plugin,
+                        0L,
+                        1L
+                );
     }
 
-    public void reset() {
+    /**
+     * Manually resets the arena.
+     *
+     * This is ONLY called by /blockedin force-reset
+     * or another explicit administrative action.
+     */
+    public void forceReset() {
+
+        if (resetTask != null) {
+            return;
+        }
 
         cancelStartDelay();
         stopPlayerRequirementDisplay();
+        cancelEndTask();
 
         if (generationTask != null) {
+
             generationTask.cancel();
             generationTask = null;
         }
 
         if (timer != null) {
+
             timer.stop();
             timer = null;
         }
 
         if (borderTask != null) {
+
             borderTask.cancel();
             borderTask = null;
         }
 
-        for (Player player : new ArrayList<>(players)) {
+        for (Player player :
+                new ArrayList<>(players)) {
+
+            resetPlayer(player);
             addSpectator(player);
         }
 
-        spawnLocations.clear();
+        removeDroppedEntities();
+
         alive.clear();
+        spawnLocations.clear();
         staticPhysicsBlocks.clear();
 
         state = GameState.WAITING;
 
-        resetArena();
+        startArenaReset(() -> {
+
+            state = GameState.WAITING;
+
+            for (Player player :
+                    new ArrayList<>(players)) {
+
+                addSpectator(player);
+            }
+
+            startPlayerRequirementDisplay();
+            updatePlayerRequirement();
+        });
+    }
+
+    /**
+     * Stops/ends the current game WITHOUT resetting the arena.
+     *
+     * The existing arena stays exactly as it is.
+     *
+     * The arena will be reset automatically when the
+     * next game starts through prepareArena().
+     */
+    public void reset() {
+
+        cancelStartDelay();
+        stopPlayerRequirementDisplay();
+        cancelEndTask();
+
+        if (generationTask != null) {
+
+            generationTask.cancel();
+            generationTask = null;
+        }
+
+        if (timer != null) {
+
+            timer.stop();
+            timer = null;
+        }
+
+        if (borderTask != null) {
+
+            borderTask.cancel();
+            borderTask = null;
+        }
+
+        for (Player player :
+                new ArrayList<>(players)) {
+
+            resetPlayer(player);
+            addSpectator(player);
+        }
+
+        removeDroppedEntities();
+
+        alive.clear();
+        spawnLocations.clear();
+        staticPhysicsBlocks.clear();
+
+        /*
+         * IMPORTANT:
+         *
+         * We do NOT call startArenaReset() here.
+         *
+         * The arena remains untouched until prepareArena()
+         * is called for the next game.
+         */
+        state = GameState.WAITING;
 
         startPlayerRequirementDisplay();
         updatePlayerRequirement();
+    }
+
+    private void resetPlayer(Player player) {
+
+        player.getInventory().clear();
+
+        player.getInventory()
+                .setArmorContents(null);
+
+        player.getInventory()
+                .setItemInOffHand(null);
+
+        player.setHealth(
+                player.getMaxHealth()
+        );
+
+        player.setFoodLevel(20);
+        player.setSaturation(20.0f);
+        player.setExhaustion(0.0f);
+
+        player.setExp(0.0f);
+        player.setLevel(0);
+        player.setTotalExperience(0);
+    }
+
+    private void cancelEndTask() {
+
+        if (endTask != null) {
+
+            endTask.cancel();
+            endTask = null;
+        }
+    }
+
+    private void removeDroppedEntities() {
+
+        if (world == null) {
+            return;
+        }
+
+        for (Entity entity :
+                new ArrayList<>(
+                        world.getEntities()
+                )) {
+
+            if (entity instanceof Item
+                    || entity instanceof ExperienceOrb) {
+
+                entity.remove();
+            }
+        }
     }
 
     public void createArena() {
@@ -443,27 +812,48 @@ public class BlockedInGame {
             return;
         }
 
-        int width = plugin.getConfig()
-                .getInt("arena.width");
+        int width =
+                plugin.getConfig()
+                        .getInt("arena.width");
 
-        int height = plugin.getConfig()
-                .getInt("arena.height");
+        int height =
+                plugin.getConfig()
+                        .getInt("arena.height");
 
-        int length = plugin.getConfig()
-                .getInt("arena.length");
+        int length =
+                plugin.getConfig()
+                        .getInt("arena.length");
 
-        for (int x = 0; x < width; x++) {
-            for (int y = 0; y < height; y++) {
-                for (int z = 0; z < length; z++) {
+        for (int x = 0;
+             x < width;
+             x++) {
+
+            for (int y = 0;
+                 y < height;
+                 y++) {
+
+                for (int z = 0;
+                     z < length;
+                     z++) {
 
                     boolean isWall =
-                            x == 0 || x == width - 1 ||
-                                    y == 0 || y == height - 1 ||
-                                    z == 0 || z == length - 1;
+                            x == 0
+                                    || x == width - 1
+                                    || y == 0
+                                    || y == height - 1
+                                    || z == 0
+                                    || z == length - 1;
 
                     if (isWall) {
-                        world.getBlockAt(x, y, z)
-                                .setType(Material.BEDROCK);
+
+                        world.getBlockAt(
+                                        x,
+                                        y,
+                                        z
+                                )
+                                .setType(
+                                        Material.BEDROCK
+                                );
                     }
                 }
             }
@@ -476,26 +866,36 @@ public class BlockedInGame {
             return;
         }
 
-        int width = plugin.getConfig()
-                .getInt("arena.width");
+        int width =
+                plugin.getConfig()
+                        .getInt("arena.width");
 
-        int length = plugin.getConfig()
-                .getInt("arena.length");
+        int length =
+                plugin.getConfig()
+                        .getInt("arena.length");
 
-        double centerX = width / 2.0;
-        double centerZ = length / 2.0;
+        double centerX =
+                width / 2.0;
 
-        double startSize = plugin.getConfig()
-                .getDouble("world-border.start-size");
+        double centerZ =
+                length / 2.0;
 
-        world.getWorldBorder().setCenter(
-                centerX,
-                centerZ
-        );
+        double startSize =
+                plugin.getConfig()
+                        .getDouble(
+                                "world-border.start-size"
+                        );
 
-        world.getWorldBorder().setSize(
-                startSize
-        );
+        world.getWorldBorder()
+                .setCenter(
+                        centerX,
+                        centerZ
+                );
+
+        world.getWorldBorder()
+                .setSize(
+                        startSize
+                );
     }
 
     public boolean createSpawnHoles() {
@@ -506,17 +906,23 @@ public class BlockedInGame {
             return false;
         }
 
-        int width = plugin.getConfig()
-                .getInt("arena.width");
+        int width =
+                plugin.getConfig()
+                        .getInt("arena.width");
 
-        int height = plugin.getConfig()
-                .getInt("arena.height");
+        int height =
+                plugin.getConfig()
+                        .getInt("arena.height");
 
-        int length = plugin.getConfig()
-                .getInt("arena.length");
+        int length =
+                plugin.getConfig()
+                        .getInt("arena.length");
 
-        double minimumDistance = plugin.getConfig()
-                .getDouble("players.minimum-spawn-distance");
+        double minimumDistance =
+                plugin.getConfig()
+                        .getDouble(
+                                "players.minimum-spawn-distance"
+                        );
 
         int minX = 2;
         int maxX = width - 3;
@@ -531,22 +937,37 @@ public class BlockedInGame {
 
             Location spawn = null;
 
-            for (int attempts = 0; attempts < 5000; attempts++) {
+            for (int attempts = 0;
+                 attempts < 5000;
+                 attempts++) {
 
-                int x = minX + random.nextInt(maxX - minX + 1);
-                int y = minY + random.nextInt(maxY - minY + 1);
-                int z = minZ + random.nextInt(maxZ - minZ + 1);
+                int x =
+                        minX + random.nextInt(
+                                maxX - minX + 1
+                        );
 
-                Location candidate = new Location(
-                        world,
-                        x + 0.5,
-                        y,
-                        z + 0.5
-                );
+                int y =
+                        minY + random.nextInt(
+                                maxY - minY + 1
+                        );
+
+                int z =
+                        minZ + random.nextInt(
+                                maxZ - minZ + 1
+                        );
+
+                Location candidate =
+                        new Location(
+                                world,
+                                x + 0.5,
+                                y,
+                                z + 0.5
+                        );
 
                 boolean valid = true;
 
-                for (Location existing : spawnLocations) {
+                for (Location existing :
+                        spawnLocations) {
 
                     if (candidate.distance(existing)
                             < minimumDistance) {
@@ -576,26 +997,36 @@ public class BlockedInGame {
 
             spawnLocations.add(spawn);
 
-            int x = spawn.getBlockX();
-            int y = spawn.getBlockY();
-            int z = spawn.getBlockZ();
+            int x =
+                    spawn.getBlockX();
 
-            world.getBlockAt(x, y, z)
-                    .setType(Material.AIR);
+            int y =
+                    spawn.getBlockY();
 
-            world.getBlockAt(x, y + 1, z)
-                    .setType(Material.AIR);
+            int z =
+                    spawn.getBlockZ();
 
-            world.getBlockAt(x, y, z)
-                    .getState()
-                    .update(true, false);
+            world.getBlockAt(
+                            x,
+                            y,
+                            z
+                    )
+                    .setType(
+                            Material.AIR
+                    );
 
-            world.getBlockAt(x, y + 1, z)
-                    .getState()
-                    .update(true, false);
+            world.getBlockAt(
+                            x,
+                            y + 1,
+                            z
+                    )
+                    .setType(
+                            Material.AIR
+                    );
         }
 
-        return spawnLocations.size() == players.size();
+        return spawnLocations.size()
+                == players.size();
     }
 
     public void teleportPlayers() {
@@ -622,28 +1053,35 @@ public class BlockedInGame {
             return;
         }
 
-        if (borderTask != null) {
-            borderTask.cancel();
-            borderTask = null;
-        }
-
-        double endSize = plugin.getConfig()
-                .getDouble("world-border.end-size");
-
-        long durationSeconds = plugin.getConfig()
-                .getLong("world-border.shrink-duration");
-
-        long durationTicks = durationSeconds * 20L;
-
-        world.getWorldBorder().setSize(
+        double startSize =
                 plugin.getConfig()
-                        .getDouble("world-border.start-size")
-        );
+                        .getDouble(
+                                "world-border.start-size"
+                        );
 
-        world.getWorldBorder().changeSize(
-                endSize,
-                durationTicks
-        );
+        double endSize =
+                plugin.getConfig()
+                        .getDouble(
+                                "world-border.end-size"
+                        );
+
+        long durationSeconds =
+                plugin.getConfig()
+                        .getLong(
+                                "world-border.shrink-duration"
+                        );
+
+        long durationTicks =
+                durationSeconds * 20L;
+
+        world.getWorldBorder()
+                .setSize(startSize);
+
+        world.getWorldBorder()
+                .changeSize(
+                        endSize,
+                        durationTicks
+                );
     }
 
     public void checkWinCondition() {
@@ -658,26 +1096,68 @@ public class BlockedInGame {
 
         if (alive.size() == 1) {
 
-            Player winner = alive.get(0);
+            Player winner =
+                    alive.get(0);
 
-            String message = "§eBlockedIn §7» §a"
-                    + winner.getName()
-                    + " §fhas won the game!";
+            plugin.getDatabase()
+                    .addWin(winner);
 
-            plugin.getServer().broadcastMessage(message);
+            String message =
+                    "§eBlockedIn §7» §a"
+                            + winner.getName()
+                            + " §fhas won the game!";
 
-            for (Player player : plugin.getServer().getOnlinePlayers()) {
+            plugin.getServer()
+                    .broadcastMessage(message);
+
+            for (Player player :
+                    plugin.getServer()
+                            .getOnlinePlayers()) {
+
                 player.showTitle(
                         net.kyori.adventure.title.Title.title(
                                 net.kyori.adventure.text.Component.text(
                                         "§6§lWINNER!"
                                 ),
                                 net.kyori.adventure.text.Component.text(
-                                        "§a" + winner.getName()
+                                        "§a"
+                                                + winner.getName()
                                 )
                         )
                 );
             }
+
+            winner.setHealth(
+                    winner.getMaxHealth()
+            );
+
+            winner.setFoodLevel(20);
+            winner.setSaturation(20.0f);
+
+            cancelEndTask();
+
+            endTask =
+                    new BukkitRunnable() {
+
+                        @Override
+                        public void run() {
+
+                            endTask = null;
+
+                            /*
+                             * This only ends the game.
+                             *
+                             * It does NOT reset the arena.
+                             */
+                            reset();
+                        }
+
+                    }.runTaskLater(
+                            plugin,
+                            100L
+                    );
+
+            return;
         }
 
         reset();
@@ -693,69 +1173,157 @@ public class BlockedInGame {
             return;
         }
 
-        int width = plugin.getConfig()
-                .getInt("arena.width");
+        int width =
+                plugin.getConfig()
+                        .getInt("arena.width");
 
-        int height = plugin.getConfig()
-                .getInt("arena.height");
+        int height =
+                plugin.getConfig()
+                        .getInt("arena.height");
 
-        int length = plugin.getConfig()
-                .getInt("arena.length");
+        int length =
+                plugin.getConfig()
+                        .getInt("arena.length");
 
-        generationTask = new BukkitRunnable() {
+        generationTask =
+                new BukkitRunnable() {
 
-            int y = 1;
+                    int y = 1;
 
-            @Override
-            public void run() {
+                    @Override
+                    public void run() {
 
-                if (state != GameState.WAITING) {
-                    cancel();
-                    generationTask = null;
-                    return;
-                }
+                        if (state != GameState.WAITING) {
 
-                if (players.isEmpty()) {
-                    cancel();
-                    generationTask = null;
-                    return;
-                }
+                            cancel();
 
-                if (y >= height - 1) {
-                    cancel();
-                    generationTask = null;
+                            generationTask = null;
 
-                    finishArenaPreparation();
-                    return;
-                }
-
-                for (int x = 1; x < width - 1; x++) {
-                    for (int z = 1; z < length - 1; z++) {
-
-                        if (isSpawnHoleBlock(x, y, z)) {
-                            continue;
+                            return;
                         }
 
-                        Material material = getRandomAllowedBlock();
+                        if (players.isEmpty()) {
 
-                        world.getBlockAt(x, y, z)
-                                .setType(material);
+                            cancel();
 
-                        if (isStaticPhysicsBlock(material)) {
-                            staticPhysicsBlocks.add(
-                                    new Location(world, x, y, z)
+                            generationTask = null;
+
+                            return;
+                        }
+
+                        if (y >= height - 1) {
+
+                            cancel();
+
+                            generationTask = null;
+
+                            sendProgress(
+                                    "Building arena",
+                                    100
                             );
+
+                            finishArenaPreparation();
+
+                            return;
                         }
+
+                        for (int x = 1;
+                             x < width - 1;
+                             x++) {
+
+                            for (int z = 1;
+                                 z < length - 1;
+                                 z++) {
+
+                                if (isSpawnHoleBlock(
+                                        x,
+                                        y,
+                                        z
+                                )) {
+
+                                    continue;
+                                }
+
+                                Material material =
+                                        getRandomAllowedBlock();
+
+                                world.getBlockAt(
+                                                x,
+                                                y,
+                                                z
+                                        )
+                                        .setType(
+                                                material
+                                        );
+
+                                if (isStaticPhysicsBlock(
+                                        material
+                                )) {
+
+                                    staticPhysicsBlocks.add(
+                                            new Location(
+                                                    world,
+                                                    x,
+                                                    y,
+                                                    z
+                                            )
+                                    );
+                                }
+                            }
+                        }
+
+                        int buildableHeight =
+                                Math.max(
+                                        1,
+                                        height - 2
+                                );
+
+                        int percent =
+                                Math.min(
+                                        100,
+                                        (int) (((y)
+                                                * 100.0)
+                                                / buildableHeight)
+                                );
+
+                        sendProgress(
+                                "Building arena",
+                                percent
+                        );
+
+                        y++;
                     }
-                }
 
-                y++;
-            }
-
-        }.runTaskTimer(plugin, 0L, 1L);
+                }.runTaskTimer(
+                        plugin,
+                        0L,
+                        1L
+                );
     }
 
-    private boolean isStaticPhysicsBlock(Material material) {
+    private void sendProgress(
+            String action,
+            int percent
+    ) {
+
+        String message =
+                "§eBlockedIn §7» §f"
+                        + action
+                        + " §e"
+                        + percent
+                        + "%";
+
+        for (Player player :
+                plugin.getServer()
+                        .getOnlinePlayers()) {
+
+            player.sendActionBar(message);
+        }
+    }
+
+    private boolean isStaticPhysicsBlock(
+            Material material
+    ) {
 
         return material == Material.SAND
                 || material == Material.GRAVEL
@@ -769,30 +1337,66 @@ public class BlockedInGame {
             int z
     ) {
 
-        for (Location spawn : spawnLocations) {
+        for (Location spawn :
+                spawnLocations) {
 
-            int spawnX = spawn.getBlockX();
-            int spawnY = spawn.getBlockY();
-            int spawnZ = spawn.getBlockZ();
+            int spawnX =
+                    spawn.getBlockX();
+
+            int spawnY =
+                    spawn.getBlockY();
+
+            int spawnZ =
+                    spawn.getBlockZ();
 
             boolean insideX =
-                    x >= spawnX - 1 &&
-                            x <= spawnX + 1;
+                    x >= spawnX - 1
+                            && x <= spawnX + 1;
 
             boolean insideZ =
-                    z >= spawnZ - 1 &&
-                            z <= spawnZ + 1;
+                    z >= spawnZ - 1
+                            && z <= spawnZ + 1;
 
             boolean insideY =
-                    y == spawnY ||
-                            y == spawnY + 1;
+                    y == spawnY
+                            || y == spawnY + 1;
 
-            if (insideX && insideZ && insideY) {
+            if (insideX
+                    && insideZ
+                    && insideY) {
+
                 return true;
             }
         }
 
         return false;
+    }
+
+    private void updatePlayerColors(Player player) {
+
+        String color =
+                alive.contains(player)
+                        ? "§a"
+                        : "§7";
+
+        player.setPlayerListName(
+                color + player.getName()
+        );
+
+        player.setDisplayName(
+                color + player.getName()
+        );
+    }
+
+    private void resetPlayerColors(Player player) {
+
+        player.setPlayerListName(
+                player.getName()
+        );
+
+        player.setDisplayName(
+                player.getName()
+        );
     }
 
     private Material getRandomAllowedBlock() {

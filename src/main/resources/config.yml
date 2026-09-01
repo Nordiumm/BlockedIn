@@ -14,6 +14,7 @@ game:
   countdown: 10
 
 world-border:
+  start-delay: 60
   start-size: 98
   end-size: 10
   shrink-duration: 600
