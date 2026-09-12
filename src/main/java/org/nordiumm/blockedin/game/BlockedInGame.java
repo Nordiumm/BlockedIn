@@ -1102,6 +1102,11 @@ public class BlockedInGame {
             plugin.getDatabase()
                     .addWin(winner);
 
+            plugin.getEventMessenger().finishEvent(
+                    winner.getUniqueId(),
+                    1
+            );
+
             String message =
                     "§eBlockedIn §7» §a"
                             + winner.getName()

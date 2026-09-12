@@ -11,6 +11,7 @@ import org.nordiumm.blockedin.listener.BlockedInBlockListener;
 import org.nordiumm.blockedin.listener.BlockedInLeaderboardListener;
 import org.nordiumm.blockedin.listener.BlockedInPlayerListener;
 import org.nordiumm.blockedin.listener.BlockedInRecipeListener;
+import org.nordiumm.blockedin.messaging.EventMessenger;
 import org.nordiumm.blockedin.recipe.BlockedInRecipes;
 
 import java.io.File;
@@ -27,6 +28,7 @@ public class BlockedIn extends JavaPlugin {
     private BlockedInGame game;
     private BlockedInRecipes recipes;
     private BlockedInDatabase database;
+    private EventMessenger eventMessenger;
 
     private final List<Material> allowedBlocks =
             new ArrayList<>();
@@ -57,6 +59,10 @@ public class BlockedIn extends JavaPlugin {
 
     public BlockedInDatabase getDatabase() {
         return database;
+    }
+
+    public EventMessenger getEventMessenger() {
+        return eventMessenger;
     }
 
     @Override
@@ -113,6 +119,13 @@ public class BlockedIn extends JavaPlugin {
                 this
         );
 
+        getServer().getMessenger().registerOutgoingPluginChannel(
+                this,
+                "nixon:events"
+        );
+
+        eventMessenger = new EventMessenger(this);
+
         getLogger().info(
                 "BlockedIn has been enabled!"
         );
@@ -128,6 +141,11 @@ public class BlockedIn extends JavaPlugin {
         if (database != null) {
             database.close();
         }
+
+        getServer().getMessenger().unregisterOutgoingPluginChannel(
+                this,
+                "nixon:events"
+        );
 
         getLogger().info(
                 "BlockedIn has been disabled!"
