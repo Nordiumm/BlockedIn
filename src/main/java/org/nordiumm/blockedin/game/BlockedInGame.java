@@ -386,13 +386,20 @@ public class BlockedInGame {
             return;
         }
 
-        for (Player player :
-                new ArrayList<>(players)) {
+        for (Player player : new ArrayList<>(players)) {
+
+            plugin.getEventAPI()
+                    .addPlayer(player);
+
+            plugin.getLogger().info(
+                    "[EventAPI] Registered player: "
+                            + player.getName()
+                            + " (" + player.getUniqueId() + ")"
+            );
 
             addAlive(player);
 
-            plugin.getDatabase()
-                    .addGamePlayed(player);
+            plugin.getDatabase().addGamePlayed(player);
         }
 
         teleportPlayers();
@@ -400,7 +407,6 @@ public class BlockedInGame {
         state = GameState.COUNTDOWN;
 
         timer = new GameTimer(this);
-
         timer.startCountdown();
     }
 
@@ -1096,28 +1102,49 @@ public class BlockedInGame {
 
         if (alive.size() == 1) {
 
-            Player winner =
-                    alive.get(0);
+            Player winner = alive.get(0);
 
-            plugin.getDatabase()
-                    .addWin(winner);
+            plugin.getDatabase().addWin(winner);
 
-            plugin.getEventMessenger().finishEvent(
-                    winner.getUniqueId(),
-                    1
+            plugin.getEventAPI()
+                    .getPlayer(winner)
+                    .setWinner(true);
+
+            plugin.getEventAPI()
+                    .getPlayer(winner)
+                    .addPoints(10);
+
+            plugin.getLogger().info(
+                    "[EventAPI] Winner: "
+                            + winner.getName()
+                            + " (" + winner.getUniqueId() + ")"
             );
 
-            String message =
-                    "§eBlockedIn §7» §a"
+            plugin.getLogger().info(
+                    "[EventAPI] Awarded 10 point to "
                             + winner.getName()
-                            + " §fhas won the game!";
+            );
 
-            plugin.getServer()
-                    .broadcastMessage(message);
+            plugin.getLogger().info(
+                    "[EventAPI] Sending event results..."
+            );
+
+            plugin.getEventAPI().finish();
+
+            plugin.getLogger().info(
+                    "[EventAPI] Event results sent."
+            );
+
+            plugin.getEventAPI().clear();
+
+            String message = "§eBlockedIn §7» §a"
+                    + winner.getName()
+                    + " §fhas won the game!";
+
+            plugin.getServer().broadcastMessage(message);
 
             for (Player player :
-                    plugin.getServer()
-                            .getOnlinePlayers()) {
+                    plugin.getServer().getOnlinePlayers()) {
 
                 player.showTitle(
                         net.kyori.adventure.title.Title.title(
@@ -1125,42 +1152,22 @@ public class BlockedInGame {
                                         "§6§lWINNER!"
                                 ),
                                 net.kyori.adventure.text.Component.text(
-                                        "§a"
-                                                + winner.getName()
+                                        "§a" + winner.getName()
                                 )
                         )
                 );
             }
 
-            winner.setHealth(
-                    winner.getMaxHealth()
-            );
-
+            winner.setHealth(winner.getMaxHealth());
             winner.setFoodLevel(20);
             winner.setSaturation(20.0f);
 
-            cancelEndTask();
-
-            endTask =
-                    new BukkitRunnable() {
-
-                        @Override
-                        public void run() {
-
-                            endTask = null;
-
-                            /*
-                             * This only ends the game.
-                             *
-                             * It does NOT reset the arena.
-                             */
-                            reset();
-                        }
-
-                    }.runTaskLater(
-                            plugin,
-                            100L
-                    );
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    reset();
+                }
+            }.runTaskLater(plugin, 100L);
 
             return;
         }

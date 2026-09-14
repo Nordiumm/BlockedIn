@@ -3,13 +3,23 @@ plugins {
     id("xyz.jpenilla.run-paper") version "3.1.0"
 }
 
+group = "org.nordiumm"
+version = "1.0.2"
+
 repositories {
     mavenCentral()
+
     maven("https://repo.papermc.io/repository/maven-public/")
+
+    maven {
+        url = uri("https://nordiumm.github.io/EventAPI/")
+    }
 }
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:26.2.build.+")
+    compileOnly("net.nordiumm:nixon-event-api:1.0.4")
+
     implementation("org.xerial:sqlite-jdbc:3.50.3.0")
 }
 
@@ -19,15 +29,16 @@ java {
 
 tasks {
     runServer {
-        // Configure the Minecraft version for our task.
-        // This is the only required configuration besides applying the plugin.
-        // Your plugin's jar (or shadowJar if present) will be used automatically.
         minecraftVersion("26.2")
         jvmArgs("-Xms2G", "-Xmx2G", "-Dcom.mojang.eula.agree=true")
     }
 
     processResources {
-        val props = mapOf("version" to version, "description" to project.description)
+        val props = mapOf(
+            "version" to project.version,
+            "description" to project.description
+        )
+
         filesMatching("plugin.yml") {
             expand(props)
         }

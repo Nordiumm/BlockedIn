@@ -118,7 +118,44 @@ public class BlockedInPlayerListener implements Listener {
                 && game.getAlive().contains(killer)) {
 
             plugin.getDatabase().addElimination(killer);
+
+            plugin.getEventAPI()
+                    .getPlayer(killer)
+                    .addKill();
+
+            plugin.getEventAPI()
+                    .getPlayer(killer)
+                    .addPoints(1);
+
+            plugin.getLogger().info(
+                    "[EventAPI] "
+                            + killer.getName()
+                            + " killed "
+                            + player.getName()
+                            + " | kills="
+                            + plugin.getEventAPI()
+                            .getPlayer(killer)
+                            .getKills()
+                            + " | points="
+                            + plugin.getEventAPI()
+                            .getPlayer(killer)
+                            .getPoints()
+            );
         }
+
+        plugin.getEventAPI()
+                .getPlayer(player)
+                .addDeath();
+
+        plugin.getLogger().info(
+                "[EventAPI] "
+                        + player.getName()
+                        + " died"
+                        + " | deaths="
+                        + plugin.getEventAPI()
+                        .getPlayer(player)
+                        .getDeaths()
+        );
 
         String message;
 

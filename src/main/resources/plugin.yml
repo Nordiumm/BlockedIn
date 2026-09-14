@@ -6,6 +6,9 @@ main: org.nordiumm.blockedin.BlockedIn
 api-version: '26.2'
 load: POSTWORLD
 
+depend:
+  - EventAPI
+
 authors: [ Nordiumm ]
 
 website: https://github.com/Nordiumm/BlockedIn

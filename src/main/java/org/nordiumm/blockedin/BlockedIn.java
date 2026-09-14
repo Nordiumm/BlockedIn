@@ -1,5 +1,8 @@
 package org.nordiumm.blockedin;
 
+import net.nordiumm.api.EventAPI;
+import net.nordiumm.api.EventAPIPlugin;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -11,7 +14,6 @@ import org.nordiumm.blockedin.listener.BlockedInBlockListener;
 import org.nordiumm.blockedin.listener.BlockedInLeaderboardListener;
 import org.nordiumm.blockedin.listener.BlockedInPlayerListener;
 import org.nordiumm.blockedin.listener.BlockedInRecipeListener;
-import org.nordiumm.blockedin.messaging.EventMessenger;
 import org.nordiumm.blockedin.recipe.BlockedInRecipes;
 
 import java.io.File;
@@ -28,7 +30,7 @@ public class BlockedIn extends JavaPlugin {
     private BlockedInGame game;
     private BlockedInRecipes recipes;
     private BlockedInDatabase database;
-    private EventMessenger eventMessenger;
+    private EventAPI eventAPI;
 
     private final List<Material> allowedBlocks =
             new ArrayList<>();
@@ -61,14 +63,38 @@ public class BlockedIn extends JavaPlugin {
         return database;
     }
 
-    public EventMessenger getEventMessenger() {
-        return eventMessenger;
+    public EventAPI getEventAPI() {
+        return eventAPI;
     }
 
     @Override
     public void onEnable() {
 
         saveDefaultConfig();
+
+        EventAPIPlugin eventAPIPlugin =
+                (EventAPIPlugin) Bukkit.getPluginManager()
+                        .getPlugin("EventAPI");
+
+        if (eventAPIPlugin == null) {
+            getLogger().severe(
+                    "EventAPI plugin could not be found!"
+            );
+
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
+        eventAPI = eventAPIPlugin.getAPI();
+
+        if (eventAPI == null) {
+            getLogger().severe(
+                    "EventAPI API instance could not be found!"
+            );
+
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
 
         recipes = new BlockedInRecipes(this);
         recipes.registerRecipes();
@@ -119,13 +145,6 @@ public class BlockedIn extends JavaPlugin {
                 this
         );
 
-        getServer().getMessenger().registerOutgoingPluginChannel(
-                this,
-                "nixon:events"
-        );
-
-        eventMessenger = new EventMessenger(this);
-
         getLogger().info(
                 "BlockedIn has been enabled!"
         );
@@ -138,14 +157,13 @@ public class BlockedIn extends JavaPlugin {
             game.reset();
         }
 
+        if (eventAPI != null) {
+            eventAPI.clear();
+        }
+
         if (database != null) {
             database.close();
         }
-
-        getServer().getMessenger().unregisterOutgoingPluginChannel(
-                this,
-                "nixon:events"
-        );
 
         getLogger().info(
                 "BlockedIn has been disabled!"
