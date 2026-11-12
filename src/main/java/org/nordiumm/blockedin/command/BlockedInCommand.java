@@ -31,10 +31,26 @@ public class BlockedInCommand implements CommandExecutor, TabCompleter {
             String[] args
     ) {
 
+        if (command.getName().equalsIgnoreCase("recipe")) {
+
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage(
+                        "§cOnly players can use this command."
+                );
+                return true;
+            }
+
+            BlockedInRecipeGUI gui =
+                    new BlockedInRecipeGUI(plugin);
+
+            gui.openRecipeMenu(player);
+            return true;
+        }
+
         if (args.length == 0) {
 
             sender.sendMessage(
-                    "Usage: /blockedin <force-start|stop|force-reset|reload|recipe|leaderboard>"
+                    "Usage: /blockedin <force-start|stop|force-reset|reload|leaderboard>"
             );
 
             return true;
@@ -197,28 +213,6 @@ public class BlockedInCommand implements CommandExecutor, TabCompleter {
         }
 
         /*
-         * RECIPE
-         */
-        if (subcommand.equals("recipe")) {
-
-            if (!(sender instanceof Player player)) {
-
-                sender.sendMessage(
-                        "§cOnly players can use this command."
-                );
-
-                return true;
-            }
-
-            BlockedInRecipeGUI gui =
-                    new BlockedInRecipeGUI(plugin);
-
-            gui.openRecipeMenu(player);
-
-            return true;
-        }
-
-        /*
          * LEADERBOARD
          */
         if (subcommand.equals("leaderboard")) {
@@ -265,7 +259,6 @@ public class BlockedInCommand implements CommandExecutor, TabCompleter {
                     "stop",
                     "force-reset",
                     "reload",
-                    "recipe",
                     "leaderboard"
             )) {
 
