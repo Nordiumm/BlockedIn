@@ -117,12 +117,15 @@ public class BlockedIn extends JavaPlugin {
                 new BlockedInCommand(this);
 
         if (getCommand("blockedin") != null) {
-
             getCommand("blockedin")
                     .setExecutor(command);
-
             getCommand("blockedin")
                     .setTabCompleter(command);
+        }
+
+        if (getCommand("recipe") != null) {
+            getCommand("recipe")
+                    .setExecutor(command);
         }
 
         getServer().getPluginManager().registerEvents(
