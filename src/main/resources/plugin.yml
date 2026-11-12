@@ -15,7 +15,9 @@ website: https://github.com/Nordiumm/BlockedIn
 
 commands:
   blockedin:
-    description: BlockedIn command
+    description: BlockedIn admin command
+  recipe:
+    description: Opens the BlockedIn recipe menu
 
 permissions:
   blockedin.admin:
